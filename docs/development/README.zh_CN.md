@@ -4,7 +4,7 @@
 
 # 工程规范（Development）
 
-本目录存放 AI Passport 的工程开发规范和可复用工作流，按用途分组：AI 开发工作流（`ai-guide.md`）、工程约定（`engineering/`）、CI 文档（`ci/`）、发布/完成流程（`release/`）。
+本目录存放 AI Passport 的工程开发规范和可复用工作流，按用途分组：AI 开发工作流（`ai-guide.md`）、工程约定（`engineering/`）、CI 文档（`ci/`）、发布/完成流程（`release/`），以及 `feature/*` 分支上衍生应用的应用说明。
 
 ## 收录标准
 
@@ -40,3 +40,8 @@
 - [publish-to-community.zh_CN.md](release/publish-to-community.zh_CN.md)：发布到社区说明（把当前固件发布到 AI Passport 社区市场）。
 - [project-completion.zh_CN.md](release/project-completion.zh_CN.md)：项目开发完成流程说明（一组可选收尾动作）。
 - [file-issues.zh_CN.md](release/file-issues.zh_CN.md)：提交 issue 说明（把建议作为上游 GitHub issue 提交）。
+
+## 应用说明
+
+- [flomo-client.zh_CN.md](flomo-client.zh_CN.md)：flomo 语音备忘客户端——应用概览与工程说明（`feature/flomo-client` 分支）。
+- [flomo-client-manual.zh_CN.md](flomo-client-manual.zh_CN.md)：flomo 语音备忘客户端的最终用户操作手册。
