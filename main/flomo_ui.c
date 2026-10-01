@@ -515,11 +515,16 @@ static void tick(lv_timer_t *timer)
 
 void flomo_ui_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
+    // PRESS 是按压过程事件,只用于即时亮屏/记录活跃时间,不进模型;否则一次
+    // 按压会拆成两个动作(PRESS 进配网页、抬起的 CLICK 又立刻退出)。
+    // DOUBLE 当前交互未定义,一并忽略。
+    s_last_key_ms = esp_timer_get_time() / 1000;
+    bsp_display_backlight(100);
+    if (ev != BSP_BTN_CLICK && ev != BSP_BTN_LONG) return;
+
     flomo_btn_t b = (flomo_btn_t)btn;
     flomo_ev_t e = (ev == BSP_BTN_LONG) ? FLOMO_EV_LONG : FLOMO_EV_CLICK;
     flomo_action_t action = flomo_ui_model_step(s_screen, b, e);
-    s_last_key_ms = esp_timer_get_time() / 1000;
-    bsp_display_backlight(100);
     if (action == FLOMO_ACTION_NONE) return;
     if (!bsp_lvgl_lock(250)) return;
     dispatch(action);
