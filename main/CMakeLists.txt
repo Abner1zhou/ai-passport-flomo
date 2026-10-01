@@ -11,11 +11,9 @@ idf_component_register(
          "flomo_recorder.c"
          "flomo_wifi.c"
          "flomo_uploader.c"
-         "flomo_blufi.c"
-         "flomo_blufi_security.c"
          "flomo_websrv.c"
     INCLUDE_DIRS "."
-    REQUIRES bsp bt nvs_flash esp_event esp_hw_support esp_netif esp_timer esp_wifi esp_http_server esp-tls mbedtls esp_littlefs esp_http_client
+    REQUIRES bsp nvs_flash esp_event esp_hw_support esp_netif esp_timer esp_wifi esp_http_server esp-tls mbedtls esp_littlefs esp_http_client
 )
 
 # 中文子集字库(assets/fonts/README 记录来源与再生成命令)。

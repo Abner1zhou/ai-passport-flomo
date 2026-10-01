@@ -15,9 +15,10 @@ the Chinese labels. For build, partition, and validation background see the
 [developer notes](flomo-client.md).
 
 > [!NOTE]
-> Device-side behavior (recording quality, provisioning with the mini program,
-> transcription accuracy, flomo writes, Chinese rendering) is not yet verified
-> on hardware. This manual describes the implemented behavior.
+> Device-side behavior (recording quality, hotspot provisioning and the
+> configuration page, transcription accuracy, flomo writes, Chinese rendering)
+> is not yet verified on hardware. This manual describes the implemented
+> behavior.
 
 ## What you need
 
@@ -30,9 +31,11 @@ the Chinese labels. For build, partition, and validation background see the
   (`https://api.groq.com/openai/v1/audio/transcriptions`,
   model `whisper-large-v3`); any compatible endpoint works.
 - A **2.4 GHz** Wi-Fi network. 5 GHz is not supported.
-- WeChat on your phone, for the provisioning mini program.
-- A phone or computer with a browser on the same network, for the device
-  configuration page.
+- A phone with Wi-Fi and a browser: it joins the device hotspot for
+  provisioning and the same network for later edits. No app is required.
+
+Provisioning and the follow-up configuration both happen on the device's own
+web page; no WeChat mini program is involved.
 
 ## The device at a glance
 
@@ -62,7 +65,10 @@ pages.
 | Progress | Automatic, after a recording finishes | Transcribing…, then Sent or Failed-queued for about 3 s | Keys are ignored |
 | Queue | From Home, click DOWN | Pending count, oldest memo's duration `mm:ss`, its attempts `n/5` | Click OK to retry; long-press OK to delete |
 | Settings | From Queue, click DOWN | Selection list: Start provisioning / Clear configuration / Power off | Long-press UP for back |
-| Provisioning | Settings → Start provisioning → OK | Provisioning status and the SSID; Connection failed on error | Click OK to abort |
+| Provisioning | Settings → Start provisioning → OK | Provisioning status, hotspot name `FoloPassport-XXXX`, page address `192.168.4.1`; *Connected* with the IP after success | Click OK to exit |
+
+The Recording screen actually accepts a click of **either** UP or DOWN to
+discard (the footer hint only mentions UP).
 
 ## Button reference
 
@@ -73,7 +79,7 @@ pages.
 | Progress | Ignored | Ignored | Ignored | Ignored | Ignored |
 | Queue | — | — | Retry sync now | Delete oldest memo | Back to Home |
 | Settings | Move selection | Move selection | Run selected item | — | Back to Home |
-| Provisioning | — | — | Abort provisioning | — | — |
+| Provisioning | — | — | Exit provisioning | — | — |
 
 Both UP and DOWN move the Settings selection forward through the three items;
 with three entries, at most two presses reach any item.
@@ -84,38 +90,31 @@ with three entries, at most two presses reach any item.
 
 The home screen shows the Wi-Fi status *Not configured* and `0` queued memos.
 
-### 2. Connect Wi-Fi (Bluetooth provisioning)
+### 2. Start the device hotspot
 
 1. From home, click DOWN twice to open **Settings**.
-2. Click UP or DOWN until `>` marks **Start provisioning**, then click OK. The
-   device advertises over Bluetooth LE as `BLUFI_FoloPassport`.
-3. On the phone: enable Bluetooth and the required permissions, open WeChat,
-   search for the companion mini program (exact name:
-   [see the provisioning guide](engineering/wifi-provisioning.md#mini-program-name)),
-   select the device, and send the credentials of a 2.4 GHz network.
-4. The provisioning screen shows *Provisioning…* and then *Connected* or
-   *Connection failed*. On success the device returns to home and the status
-   shows *Connected*; the credentials are saved and reused after every reboot.
-   Click OK to abort provisioning and return home.
+2. Click UP or DOWN until `>` marks **Start provisioning**, then click OK.
+3. The device opens an **open hotspot** (no password) named like
+   `FoloPassport-A1B2` (the last four hex digits differ per device). The
+   provisioning screen shows the hotspot name and the page address
+   `192.168.4.1`.
 
-Wrong password, a 5 GHz network, or being out of range end in
-*Connection failed*; simply retry.
+### 3. Join the hotspot from the phone
 
-### 3. Find the device IP address
+In the phone's Wi-Fi settings pick `FoloPassport-XXXX`. The phone may warn that
+the network "has no Internet" or suggest switching to mobile data — **stay
+connected and do not switch**; provisioning only needs the local link between
+phone and device.
 
-The device never displays its IP on screen after provisioning. Use one of:
+### 4. Provision and configure on the web page
 
-- **Serial console**: connect the device over USB and watch the console; when
-  Wi-Fi connects, ESP-IDF prints a `sta ip: x.x.x.x` line.
-- **Router**: look up the device in the router's DHCP client list.
+Open `http://192.168.4.1/` in the phone's browser. The page has two parts:
 
-The configuration page address follows the IP, so a static DHCP lease (IP
-reservation) for the device avoids hunting for the address later.
-
-### 4. Fill in the configuration page
-
-Open `http://<device-ip>/` from a browser on the same network. The page shows
-the pending queue count and five fields:
+- **Wi-Fi**: a dropdown with the networks the device scanned (with signal
+  strength and encryption state); picking one fills the network name, and
+  hidden networks can be typed manually. Below it, the Wi-Fi password field
+  (leave empty for open networks).
+- **flomo/ASR configuration**: five fields —
 
 | Field | Meaning | Rule |
 | --- | --- | --- |
@@ -125,23 +124,45 @@ the pending queue count and five fields:
 | ASR model | Model name | Defaults to `whisper-large-v3` |
 | Language | Transcription language hint such as `zh` | Defaults to `zh`; empty means auto-detect |
 
-Click **Save**. The page answers *Save succeeded* or *Save failed* — a failure
-means a value is invalid (webhook or endpoint not starting with `https://`) or
-too long; nothing is changed and no partial data is written.
+Press **Save & connect**: the device saves the configuration, then connects
+with the submitted Wi-Fi credentials. The page polls the result and shows
+*Connected \<ip\>* or *Connection failed*.
 
 > [!IMPORTANT]
 > The ASR key is write-only: it is stored on the device but never echoed back
-> to the page. **Re-enter the ASR key on every later save**, even when changing
-> an unrelated field — submitting the form with an empty key field clears the
-> stored key and syncing stops until the key is entered again.
+> to the page. **Leaving the key field empty keeps the stored key unchanged**;
+> on first setup you must fill it in, otherwise transcription cannot work.
 
-### 5. Record a test memo
+### 5. Done
+
+On success the device screen shows *Connected* with the IP and, about 5 s
+later, closes the hotspot and returns to home (the short delay lets the phone
+page poll the result). Wi-Fi credentials and the flomo/ASR configuration are
+saved; after a reboot the device reconnects and syncs on its own.
+
+Wrong password, a 5 GHz network, or a weak signal end in *Connection failed* —
+the hotspot stays up; correct the form and press Save & connect again. Click
+OK to leave provisioning at any time (existing credentials reconnect).
+
+### 6. Record a test memo
 
 Long-press OK on home, say a sentence, click OK. The screen runs through
 *Transcribing…* to *Sent*, and the note appears in flomo within seconds: its
 content is the raw transcript; no tags are added.
 
 ## Daily use
+
+### Changing configuration or Wi-Fi
+
+- **Edit the flomo/ASR configuration**: once the device is online, open
+  `http://<device-ip>/` from a browser on the same network (the device never
+  shows its IP on the home screen; find it in the router's DHCP list, or note
+  the address the provisioning page displayed on success). Same page, without
+  the Wi-Fi section. A static DHCP lease (IP reservation) avoids hunting for
+  the address later.
+- **Switch Wi-Fi networks**: re-enter **Settings → Start provisioning** and
+  repeat steps 3–5 of first-time setup. The stored flomo/ASR configuration is
+  untouched (an empty key field keeps the stored key).
 
 ### Recording a memo
 
@@ -181,25 +202,32 @@ configuration all survive.
 
 | What you see | Meaning | What to do |
 | --- | --- | --- |
-| Save failed on the configuration page | Webhook or endpoint URL does not start with `https://`, or a value is too long | Correct the value and save again |
-| Memos stopped syncing after a later configuration save | The form was saved with an empty ASR key, which cleared the stored key | Re-enter the key and save |
+| Page shows *Connection failed* | Wrong Wi-Fi password, 5 GHz network, or weak signal | The hotspot stays up; correct the form and save again |
+| Phone cannot find the `FoloPassport-XXXX` hotspot | The device is not on the provisioning screen, or is too far away | Make sure the device stays on the provisioning screen; move closer |
+| Hotspot connected but `192.168.4.1` does not load | The phone switched to mobile data / another Wi-Fi, or the browser enforced https | Stay on the device hotspot; type `http://` (not https) manually |
+| Page shows *Save failed* | Webhook or endpoint URL does not start with `https://`, or a value is too long | Correct the value and save again |
+| Provisioning screen stuck after *Connection failed* | A connection attempt failed and the device is waiting for the next submit from the page | Correct and resubmit on the page; or click OK to exit and re-enter |
 | Connection failed on home | Saved credentials do not work or the network is unreachable; the device keeps retrying | Check the router; re-provision to switch networks |
 | Failed-queued after recording | A network or server error occurred during transcription or posting | Nothing to do: retried automatically about once a minute |
 | Queue count drops but no note appears in flomo | A memo was dropped: HTTP 4xx (webhook token invalid or expired), 5 failed attempts, or a transcript over 3 KB | Check the webhook URL in flomo; prefer shorter memos |
 | A recording ends and is discarded immediately | The queue partition is full | Sync or delete queued memos, then record again |
 | Screen is dark | Idle dimming after 15 s | Press any button |
 | Device does not wake after Power off | Deep sleep has no button wake | Use the reset button or re-power |
-| Provisioning ends in Connection failed | Wrong password, 5 GHz network, or out of range | Retry with correct 2.4 GHz credentials |
 | Home still shows Not configured after reboot | Configuration was cleared | Redo [First-time setup](#first-time-setup) |
 
 ## Privacy and data
 
 - Wi-Fi credentials and the flomo/ASR configuration are stored in the device's
   NVS. The ASR key is write-only: never echoed to the configuration page and
-  never written to logs.
-- The configuration page uses plain HTTP on the LAN. This is a deliberate
-  trade-off: the device IP is dynamic, so a server certificate cannot be
-  validated. Use the page only on networks you trust.
+  never written to logs; page request bodies are likewise never logged.
+- The provisioning hotspot is an **open network** served over plain HTTP:
+  while provisioning is active, anyone nearby can connect and submit settings
+  (including the Wi-Fi password you type). This is the accepted trade-off of
+  SoftAP provisioning (the same as xiaozhi-style devices): provision in a
+  trusted environment; the hotspot closes as soon as the device connects.
+- The post-connection configuration page also uses plain HTTP on the LAN — a
+  deliberate trade-off, since the device IP is dynamic and a server
+  certificate cannot be validated. Use the page only on networks you trust.
 - Voice memos are stored on device flash until they are synced or dropped,
   then deleted. Audio is uploaded to the configured ASR endpoint; the
   transcript is posted to flomo's webhook.
@@ -217,4 +245,5 @@ configuration all survive.
 | Transcript length | 3 KB maximum; longer transcripts are dropped |
 | Upload attempts | 5 per memo; HTTP 4xx drops immediately |
 | Wi-Fi | 2.4 GHz only |
+| Provisioning hotspot | `FoloPassport-XXXX`, open; page at `http://192.168.4.1/` |
 | flomo | Incoming Webhook requires flomo PRO |
