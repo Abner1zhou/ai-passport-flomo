@@ -1,4 +1,7 @@
 # Name,   Type, SubType, Offset,   Size,     Flags
+# flomo 客户端布局:factory 3.0625MB(Wi-Fi+NimBLE+TLS+littlefs 余量),
+# storage 为 littlefs 离线备忘录队列(约 4.8MB,16kHz/16bit 单声道 WAV 32KB/s,总共约 2.5 分钟音频)。
 nvs,      data, nvs,     0x9000,   0x6000,
 phy_init, data, phy,     0xf000,   0x1000,
-factory,  app,  factory, 0x10000,  0x7f0000,
+factory,  app,  factory, 0x10000,  0x310000,
+storage,  data, littlefs,0x320000, 0x4e0000,

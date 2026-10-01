@@ -4,7 +4,7 @@
 
 # Development Guidelines
 
-This directory contains AI Passport engineering rules and reusable workflows, grouped by purpose: the AI-assisted development workflow (`ai-guide.md`), engineering conventions (`engineering/`), CI documents (`ci/`), and the release/completion flow (`release/`). Rules should identify their trigger, required action, prohibited action, validation, and exceptions. Hardware facts belong in `docs/hardware-design/`; automatable requirements must also be enforced by tooling or CI.
+This directory contains AI Passport engineering rules and reusable workflows, grouped by purpose: the AI-assisted development workflow (`ai-guide.md`), engineering conventions (`engineering/`), CI documents (`ci/`), the release/completion flow (`release/`), and notes for derivative applications maintained on `feature/*` branches. Rules should identify their trigger, required action, prohibited action, validation, and exceptions. Hardware facts belong in `docs/hardware-design/`; automatable requirements must also be enforced by tooling or CI.
 
 ## AI workflow
 
@@ -31,3 +31,8 @@ This directory contains AI Passport engineering rules and reusable workflows, gr
 - [publish-to-community.md](release/publish-to-community.md): publishing firmware to the AI Passport community market.
 - [project-completion.md](release/project-completion.md): project completion flow — a menu of optional closing actions.
 - [file-issues.md](release/file-issues.md): filing a suggestion as an upstream GitHub issue.
+
+## Application notes
+
+- [flomo-client.md](flomo-client.md): flomo voice-memo client — application overview and engineering notes (branch `feature/flomo-client`).
+- [flomo-client-manual.md](flomo-client-manual.md): end-user operation manual for the flomo voice-memo client.

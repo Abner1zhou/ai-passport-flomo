@@ -15,6 +15,15 @@
 - 添加字库前评估 Flash 与内部 RAM 影响；ESP32-C3 无 PSRAM。
 - 不提交许可不允许分发的字库。
 
+| 文件 | 字级与格式 | 用途与来源 |
+| --- | --- | --- |
+| [`fonts/NotoSansSC-Regular.otf`](fonts/NotoSansSC-Regular.otf) | OTF | flomo 语音速记应用子集字库的源字体，取自 [noto-cjk](https://github.com/notofonts/noto-cjk) 官方发布 `Sans2.004`（`18_NotoSansSC.zip`）。采用 SIL Open Font License 1.1 许可，详见 [`fonts/LICENSE-NotoSansSC.txt`](fonts/LICENSE-NotoSansSC.txt)。 |
+| [`fonts/flomo_strings.txt`](fonts/flomo_strings.txt) | UTF-8 文本 | flomo 应用 UI 字符串的唯一事实来源，子集需覆盖其中全部字符。 |
+| [`fonts/flomo_chars.txt`](fonts/flomo_chars.txt) | UTF-8 文本 | 派生的字符清单：UI 字符串的全部去重码点，加上可打印 ASCII `0x20-0x7E` 与 U+2026、U+00B7、U+FF1F、U+3002、U+FF0C；每行一个 `U+XXXX`，已排序。 |
+| [`fonts/flomo_font_16.c`](fonts/flomo_font_16.c) | 16 px，4 bpp，LVGL（`flomo_font_16`） | flomo 应用 UI 使用的子集字库，由 Noto Sans SC Regular 经 `lv_font_conv@1.5.3` 转换生成。 |
+| [`fonts/flomo_font_24.c`](fonts/flomo_font_24.c) | 24 px，4 bpp，LVGL（`flomo_font_24`） | `flomo_font_16` 的大字号配套字库，用于标题/强调。 |
+| [`fonts/flomo_font_build.sh`](fonts/flomo_font_build.sh) | Shell 脚本 | 可复现地重新生成两个 `.c` 文件。脚本读取 `flomo_chars.txt`，执行固定的转换器版本：`npx --yes lv_font_conv@1.5.3 --font NotoSansSC-Regular.otf --size <16\|24> --bpp 4 --format lvgl --no-compress --lv-include lvgl.h --range <flomo_chars.txt 中的字符> --lv-font-name flomo_font_<size> -o flomo_font_<size>.c`。重新生成请执行 `./fonts/flomo_font_build.sh`。 |
+
 ## 图片（images）
 
 可复用的源图与生成的显示资产放在 `images/`。

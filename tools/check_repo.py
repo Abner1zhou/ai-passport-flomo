@@ -36,7 +36,10 @@ ROOT_MARKDOWN_ALLOWLIST = {
 }
 # Register only concrete, vendored component directories, e.g. "components/foo".
 # These exemptions never change the input to sensitive-content/conflict checks.
-VENDORED_DOC_ROOTS: tuple[str, ...] = ()
+# components/esp_littlefs: vendored from joltwallet/esp_littlefs v1.22.3 (+ littlefs
+# submodule 6cb4e86) because some build environments cannot reach the ESP Component
+# Registry; its upstream English docs are not repository-maintained documents.
+VENDORED_DOC_ROOTS: tuple[str, ...] = ("components/esp_littlefs",)
 
 
 def vendored_document_roots(errors: list[str]) -> tuple[Path, ...]:
