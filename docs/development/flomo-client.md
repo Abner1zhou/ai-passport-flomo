@@ -22,8 +22,9 @@ and synced automatically.
 
 1. Power on and press OK (DOWN cycles pages) to reach **Settings**.
 2. Select **Start provisioning**. The device advertises over BLE as
-   `BLUFI_FoloPassport`. Use the ESP Config mini program to send 2.4 GHz Wi-Fi
-   credentials (see the [Wi-Fi provisioning guide](engineering/wifi-provisioning.md)).
+   `BLUFI_FoloPassport`. Use the companion WeChat mini program (exact name:
+   [see the provisioning guide](engineering/wifi-provisioning.md#mini-program-name))
+   to send 2.4 GHz Wi-Fi credentials.
 3. After the device connects, open `http://<device-ip>/` from a browser on the same
    network and fill in the flomo webhook URL, ASR endpoint, key, model, and language.
    The ASR key is stored in NVS only, never echoed back, and never logged.
@@ -35,7 +36,7 @@ and synced automatically.
 ## Daily use
 
 - **Record**: long-press OK on the home screen; click OK to finish, click UP/DOWN to
-  discard. Maximum 120 s per memo (16 kHz/16-bit mono WAV, about 3.7 MB/min).
+  discard. Maximum 120 s per memo (16 kHz/16-bit mono WAV, about 1.9 MB/min).
 - **Sync**: after recording, the device transcribes and posts automatically. On
   failure the memo stays queued; the **Queue** screen shows pending count, the
   oldest memo's duration and retry count. OK re-triggers a sync, long-press OK
@@ -49,8 +50,9 @@ and synced automatically.
 ## Partition layout
 
 `partitions.csv` on this branch reserves a ~4.8 MB `storage` (littlefs) partition for
-the offline queue and shrinks the factory app to ~3.06 MB. Flashing the merged image
-reformats the previous single-app layout.
+the offline queue — about 2.5 minutes of 16 kHz/16-bit mono audio in total — and
+shrinks the factory app to ~3.06 MB. Flashing the merged image reformats the previous
+single-app layout.
 
 ## Validation status
 
