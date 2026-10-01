@@ -3,8 +3,8 @@
 // 线程模型:
 //  - 按键:main 的输入任务调 flomo_ui_key() → 模型查表 → 动作(全部短操作,
 //    网络/录音请求只发通知)。
-//  - 状态:1s lv_timer 刷新 Wi-Fi/电量/队列数;录音 tick、上传结果、BluFi 状态
-//    来自各自任务,经本文件的少量原子状态 + 各自持锁刷新标签。
+//  - 状态:1s lv_timer 刷新 Wi-Fi/电量/队列数;录音 tick、上传结果、Wi-Fi 与
+//    配网状态来自各自任务,经本文件的少量原子状态 + 各自持锁刷新标签。
 //  - 熄屏:15s 无按键 backlight 0,任意按键恢复(功耗约定)。
 #include "flomo_ui.h"
 
@@ -19,7 +19,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include "flomo_blufi.h"
 #include "flomo_config.h"
 #include "flomo_recorder.h"
 #include "flomo_store.h"
@@ -48,8 +47,9 @@ static lv_timer_t *s_timer;
 static int s_settings_cursor;
 static volatile int32_t s_rec_sec;
 static volatile int32_t s_rec_level;
-static volatile flomo_blufi_state_t s_blufi_state;
-static char s_blufi_info[48];
+static char s_wifi_ip[16];                 // 最近上报 IP(配网页已连接时展示)
+static volatile int64_t s_prov_exit_ms;    // 配网成功后的收尾时刻(热点多留 5s)
+static portMUX_TYPE s_cfg_lock = portMUX_INITIALIZER_UNLOCKED;
 static int64_t s_result_hold_until;
 static flomo_wifi_state_t s_wifi_state = FLOMO_WIFI_OFF;
 static int64_t s_last_key_ms;
@@ -139,9 +139,7 @@ static void home_refresh(void)
 {
     char line[96];
     const char *wifi = TXT_WIFI_OFF;
-    if (s_blufi_state == FLOMO_BLUFI_ADVERTISING ||
-        s_blufi_state == FLOMO_BLUFI_BLE_CONNECTED ||
-        s_blufi_state == FLOMO_BLUFI_WIFI_CONNECTING) {
+    if (s_wifi_state == FLOMO_WIFI_PROV_AP) {
         wifi = TXT_WIFI_PROV;
     } else if (s_wifi_state == FLOMO_WIFI_CONNECTED) {
         wifi = TXT_WIFI_ON;
@@ -202,14 +200,22 @@ static void settings_refresh(void)
     lv_label_set_text(s_hint, TXT_BACK);
 }
 
+// 配网页:热点名 + 固定页面地址(全 ASCII,字库天然覆盖);已连接后显示 IP。
 static void provision_refresh(void)
 {
     const char *st = TXT_WIFI_PROV;
-    if (s_blufi_state == FLOMO_BLUFI_BLE_CONNECTED) st = TXT_WIFI_PROV;
-    if (s_blufi_state == FLOMO_BLUFI_WIFI_CONNECTED) st = TXT_WIFI_ON;
-    if (s_blufi_state == FLOMO_BLUFI_FAILED) st = TXT_WIFI_FAIL;
+    if (s_wifi_state == FLOMO_WIFI_CONNECTING) st = TXT_WIFI_CONN;
+    if (s_wifi_state == FLOMO_WIFI_CONNECTED) st = TXT_WIFI_ON;
+    if (s_wifi_state == FLOMO_WIFI_FAILED) st = TXT_WIFI_FAIL;
+    char ap[24];
+    flomo_wifi_ap_ssid(ap, sizeof(ap));
     char line[112];
-    snprintf(line, sizeof(line), "%s\n\n%s\n\n%s", st, s_blufi_info, TXT_BACK);
+    if (s_wifi_state == FLOMO_WIFI_CONNECTED) {
+        snprintf(line, sizeof(line), "%s\n\n%s\n\n%s", st, s_wifi_ip, TXT_BACK);
+    } else {
+        snprintf(line, sizeof(line), "%s\n\n%s\n\n192.168.4.1\n\n%s",
+                 st, ap, TXT_BACK);
+    }
     lv_label_set_text(s_body, line);
     lv_label_set_text(s_hint, TXT_BACK);
 }
@@ -302,33 +308,42 @@ static void on_upload_result(flomo_sync_result_t result, const char *detail, voi
     bsp_lvgl_unlock();
 }
 
-static void on_blufi_state(flomo_blufi_state_t state, const char *ssid,
-                           const char *ip, void *user)
+// 统一配置应用路径(配置页表单提交):载入 → 部分更新解析 → 保存 → 刷新上传
+// 配置并 kick。运行上下文:httpd 任务;NVS 自带线程安全。
+static bool apply_config_json(const char *json)
 {
-    (void)user;
-    s_blufi_state = state;
-    s_blufi_info[0] = '\0';
-    if (ssid) snprintf(s_blufi_info, sizeof(s_blufi_info), "%s", ssid);
-    if (ip) snprintf(s_blufi_info + strlen(s_blufi_info),
-                     sizeof(s_blufi_info) - strlen(s_blufi_info), " %s", ip);
-    if (state == FLOMO_BLUFI_WIFI_CONNECTED) {
-        // 配网完成:停 BluFi 释放 BLE,回主页;Wi-Fi 由 flomo_wifi 维持。
-        flomo_blufi_stop();
-        if (bsp_lvgl_lock(500)) {
-            page_open(FLOMO_SCREEN_HOME);
-            bsp_lvgl_unlock();
-        }
+    flomo_config_t cfg;
+    if (flomo_config_load(&cfg) != ESP_OK) {
+        ESP_LOGE(TAG, "config load failed");
+        return false;
     }
+    flomo_config_parse_err_t perr = flomo_config_parse_json(&cfg, json);
+    if (perr != FLOMO_CFG_PARSE_OK) {
+        ESP_LOGW(TAG, "bad config json: %d", perr);
+        return false;
+    }
+    if (flomo_config_save(&cfg) != ESP_OK) {
+        ESP_LOGE(TAG, "config NVS write failed");
+        return false;
+    }
+    portENTER_CRITICAL(&s_cfg_lock);
+    flomo_uploader_set_config(&cfg);
+    portEXIT_CRITICAL(&s_cfg_lock);
+    flomo_uploader_kick();
+    return true;
 }
 
-static void on_config_saved(void *user)
+static bool websrv_apply_config(const char *json, void *user)
 {
     (void)user;
-    flomo_config_t cfg;
-    if (flomo_config_load(&cfg) == ESP_OK) {
-        flomo_uploader_set_config(&cfg);
-        flomo_uploader_kick();
-    }
+    return apply_config_json(json);
+}
+
+// 配网页提交的 Wi-Fi 凭证:转交 Wi-Fi 模块写入并连接。
+static bool websrv_apply_wifi(const char *ssid, const char *password, void *user)
+{
+    (void)user;
+    return flomo_wifi_apply_credentials(ssid, password) == ESP_OK;
 }
 
 static size_t on_queue_count(void *user)
@@ -341,13 +356,27 @@ static void on_wifi_state(flomo_wifi_state_t state, const char *ip, void *user)
 {
     (void)user;
     s_wifi_state = state;
-    if (state == FLOMO_WIFI_CONNECTED && ip) {
+    snprintf(s_wifi_ip, sizeof(s_wifi_ip), "%s", ip ? ip : "");
+    if (state == FLOMO_WIFI_PROV_AP) {
+        // 热点已开:配置页随之上线(手机连入后访问 192.168.4.1)。
         flomo_websrv_start(&(flomo_websrv_hooks_t){
-            .on_config_saved = on_config_saved,
+            .apply_config = websrv_apply_config,
+            .apply_wifi = websrv_apply_wifi,
+            .queue_count = on_queue_count,
+            .user = NULL,
+        });
+    } else if (state == FLOMO_WIFI_CONNECTED && ip) {
+        flomo_websrv_start(&(flomo_websrv_hooks_t){
+            .apply_config = websrv_apply_config,
+            .apply_wifi = websrv_apply_wifi,
             .queue_count = on_queue_count,
             .user = NULL,
         });
         flomo_uploader_kick();
+        if (flomo_wifi_provisioning()) {
+            // 配网成功:热点多留 5 秒让手机页面轮询到结果,之后由 tick 收尾。
+            s_prov_exit_ms = esp_timer_get_time() / 1000 + 5000;
+        }
     }
 }
 
@@ -420,9 +449,9 @@ static void dispatch(flomo_action_t action)
         break;
     case FLOMO_ACTION_SETTINGS_ENTER:
         if (s_settings_cursor == 0) {
-            s_blufi_state = FLOMO_BLUFI_OFF;
+            s_prov_exit_ms = 0;
             page_open(FLOMO_SCREEN_PROVISION);
-            flomo_blufi_start(on_blufi_state, NULL);
+            flomo_wifi_begin_provisioning();   // 热点+配置页上线
         } else if (s_settings_cursor == 1) {
             flomo_config_clear();
             flomo_wifi_forget();
@@ -436,10 +465,11 @@ static void dispatch(flomo_action_t action)
         break;
     case FLOMO_ACTION_BACK:
     case FLOMO_ACTION_PROVISION_EXIT:
-        if (s_blufi_state != FLOMO_BLUFI_OFF) {
-            flomo_blufi_stop();
-            s_blufi_state = FLOMO_BLUFI_OFF;
+        if (flomo_wifi_provisioning()) {
+            flomo_wifi_end_provisioning();
+            if (!flomo_wifi_connected()) flomo_websrv_stop();
         }
+        s_prov_exit_ms = 0;
         page_open(FLOMO_SCREEN_HOME);
         break;
     default:
@@ -459,7 +489,17 @@ static void tick(lv_timer_t *timer)
     }
     if (s_screen == FLOMO_SCREEN_HOME) home_refresh();
     if (s_screen == FLOMO_SCREEN_QUEUE) queue_refresh();
-    if (s_screen == FLOMO_SCREEN_PROVISION) provision_refresh();
+    if (s_screen == FLOMO_SCREEN_PROVISION) {
+        provision_refresh();
+        // 配网成功后的收尾:在 LVGL 任务里关热点回主页(此时手机页面已轮询
+        // 到连接结果);Wi-Fi 连接本身由 flomo_wifi 维持。
+        if (s_prov_exit_ms && now >= s_prov_exit_ms) {
+            s_prov_exit_ms = 0;
+            flomo_wifi_end_provisioning();
+            if (!flomo_wifi_connected()) flomo_websrv_stop();
+            page_open(FLOMO_SCREEN_HOME);
+        }
+    }
     if (s_screen == FLOMO_SCREEN_PROGRESS && s_result_hold_until &&
         now >= s_result_hold_until) {
         s_result_hold_until = 0;
