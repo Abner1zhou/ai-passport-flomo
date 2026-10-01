@@ -61,11 +61,29 @@ run_static_checks() {
             -o "${test_dir}/test_demo_${demo}_runtime"
         "${test_dir}/test_demo_${demo}_runtime"
     done
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_flomo_wav.c main/flomo_wav.c \
+        -o "${test_dir}/test_flomo_wav"
+    "${test_dir}/test_flomo_wav"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        -Itests/demo_stubs \
+        tests/test_flomo_json.c main/flomo_json.c main/flomo_config_json.c \
+        -o "${test_dir}/test_flomo_json"
+    "${test_dir}/test_flomo_json"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_flomo_queue_policy.c main/flomo_queue_policy.c \
+        -o "${test_dir}/test_flomo_queue_policy"
+    "${test_dir}/test_flomo_queue_policy"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_flomo_ui_model.c main/flomo_ui_model.c \
+        -o "${test_dir}/test_flomo_ui_model"
+    "${test_dir}/test_flomo_ui_model"
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_deep_sleep_contract.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_check_repo.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_verify_firmware.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_archive_firmware.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_install_passport_skills.py
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_flomo_font_coverage.py
     rm -rf "${test_dir}"
     echo "Host tests: PASS"
 }

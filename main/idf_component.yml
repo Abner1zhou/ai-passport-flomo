@@ -1,0 +1,5 @@
+dependencies:
+  idf: ">=5.5.3,<5.6.0"
+  # esp_littlefs 以本地组件形式内嵌于 components/esp_littlefs(见其 README 说明);
+  # 若你的网络可访问 ESP 组件注册表,也可删除该目录并改回:
+  #   espressif/esp_littlefs: "^1.22.3"

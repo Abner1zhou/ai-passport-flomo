@@ -15,7 +15,17 @@ Store reusable font files and generated font sources in `fonts/`.
 - Use descriptive names that include the family, weight, size, and format when relevant.
 - Document the source, license, character range, conversion command, and expected destination.
 - Check Flash and internal-RAM impact before adding a font; the ESP32-C3 has no PSRAM.
+
 - Do not commit fonts whose license does not permit redistribution.
+
+| File | Size and format | Use and source |
+| --- | --- | --- |
+| [`fonts/NotoSansSC-Regular.otf`](fonts/NotoSansSC-Regular.otf) | OTF | Source font for the flomo voice-memo app subset fonts, from the official [noto-cjk](https://github.com/notofonts/noto-cjk) release `Sans2.004` (`18_NotoSansSC.zip`). Licensed under the SIL Open Font License 1.1; see [`fonts/LICENSE-NotoSansSC.txt`](fonts/LICENSE-NotoSansSC.txt). |
+| [`fonts/flomo_strings.txt`](fonts/flomo_strings.txt) | UTF-8 text | Single source of truth for the flomo app UI strings the subset must cover. |
+| [`fonts/flomo_chars.txt`](fonts/flomo_chars.txt) | UTF-8 text | Derived character inventory: unique code points of the UI strings plus printable ASCII `0x20-0x7E` and U+2026, U+00B7, U+FF1F, U+3002, U+FF0C — one `U+XXXX` per line, sorted. |
+| [`fonts/flomo_font_16.c`](fonts/flomo_font_16.c) | 16 px, 4 bpp, LVGL (`flomo_font_16`) | Generated subset font for the flomo app UI, converted from Noto Sans SC Regular with `lv_font_conv@1.5.3`. |
+| [`fonts/flomo_font_24.c`](fonts/flomo_font_24.c) | 24 px, 4 bpp, LVGL (`flomo_font_24`) | Larger companion of `flomo_font_16` for headings/emphasis in the flomo app. |
+| [`fonts/flomo_font_build.sh`](fonts/flomo_font_build.sh) | Shell script | Reproducible regeneration of both `.c` files. It reads `flomo_chars.txt` and runs the pinned converter: `npx --yes lv_font_conv@1.5.3 --font NotoSansSC-Regular.otf --size <16\|24> --bpp 4 --format lvgl --no-compress --lv-include lvgl.h --range <chars from flomo_chars.txt> --lv-font-name flomo_font_<size> -o flomo_font_<size>.c`. Regenerate with `./fonts/flomo_font_build.sh`. |
 
 ## Images
 
